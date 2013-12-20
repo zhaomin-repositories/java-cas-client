@@ -24,6 +24,8 @@ import java.security.acl.Group;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+
 import javax.security.auth.Subject;
 import javax.security.auth.login.LoginException;
 import org.jasig.cas.client.PublicTestHttpServer;
@@ -45,10 +47,6 @@ public class CasLoginModuleTests {
 
     private static final String CONST_CAS_SERVER_URL = "http://localhost:8091/";
 
-    private CasLoginModule module;
-
-    private Subject subject;
-
     private Map<String, String> options;
 
     /* @AfterClass
@@ -58,10 +56,7 @@ public class CasLoginModuleTests {
 
     @Before
     public void setUp() throws Exception {
-        module = new CasLoginModule();
-        subject = new Subject();
         options = new HashMap<String, String>();
-        options.put("service", "https://service.example.com/webapp");
         options.put("ticketValidatorClass", "org.jasig.cas.client.validation.Cas20ServiceTicketValidator");
         options.put("casServerUrlPrefix", CONST_CAS_SERVER_URL);
         options.put("proxyCallbackUrl", "https://service.example.com/webapp/proxy");
@@ -85,6 +80,8 @@ public class CasLoginModuleTests {
                 + "</cas:user></cas:authenticationSuccess></cas:serviceResponse>";
         server.content = RESPONSE.getBytes(server.encoding);
 
+        final CasLoginModule module = new CasLoginModule();
+        final Subject subject = new Subject();
         module.initialize(
                 subject,
                 new ServiceAndTicketCallbackHandler(SERVICE, TICKET),
@@ -92,11 +89,47 @@ public class CasLoginModuleTests {
                 options);
         module.login();
         module.commit();
-        assertEquals(this.subject.getPrincipals().size(), 3);
-        assertEquals(TICKET, this.subject.getPrivateCredentials().iterator().next().toString());
-        assertTrue(hasPrincipalName(this.subject, AssertionPrincipal.class, USERNAME));
-        assertTrue(hasPrincipalName(this.subject, Group.class, "CallerPrincipal"));
-        assertTrue(hasPrincipalName(this.subject, Group.class, "Roles"));
+        assertEquals(subject.getPrincipals().size(), 3);
+        assertEquals(TICKET, subject.getPrivateCredentials().iterator().next().toString());
+        assertTrue(hasPrincipalName(subject, Group.class, "CallerPrincipal"));
+        assertTrue(hasPrincipalName(subject, Group.class, "Roles"));
+        final AssertionPrincipal principal = getPrincipal(subject, AssertionPrincipal.class);
+        assertEquals(USERNAME, principal.getName());
+        final Matcher m = CasLoginModule.UNIQUE_SUFFIX_PATTERN.matcher(principal.getServicePrincipal());
+        assertTrue(m.matches());
+    }
+
+
+    /**
+     * Test JAAS login success.
+     * @throws Exception On errors.
+     */
+    @Test
+    public void testLoginSuccessUniquePrincipal() throws Exception {
+        final String USERNAME = "alice";
+        final String SERVICE = "https://example.com/service" + CasLoginModule.createUniqueSuffix();
+        final String TICKET = "ST-100001-aA5Zabcxzpv8Tau1abeZ-srv1";
+        final String RESPONSE = "<cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'>"
+                + "<cas:authenticationSuccess><cas:user>" + USERNAME
+                + "</cas:user></cas:authenticationSuccess></cas:serviceResponse>";
+        server.content = RESPONSE.getBytes(server.encoding);
+
+        final CasLoginModule module = new CasLoginModule();
+        final Subject subject = new Subject();
+        module.initialize(
+                subject,
+                new ServiceAndTicketCallbackHandler(SERVICE, TICKET),
+                new HashMap<String, Object>(),
+                options);
+        module.login();
+        module.commit();
+        assertEquals(subject.getPrincipals().size(), 3);
+        assertEquals(TICKET, subject.getPrivateCredentials().iterator().next().toString());
+        assertTrue(hasPrincipalName(subject, Group.class, "CallerPrincipal"));
+        assertTrue(hasPrincipalName(subject, Group.class, "Roles"));
+        final AssertionPrincipal principal = getPrincipal(subject, AssertionPrincipal.class);
+        assertEquals(USERNAME, principal.getName());
+        assertEquals(SERVICE, principal.getServicePrincipal());
     }
 
     /**
@@ -109,6 +142,9 @@ public class CasLoginModuleTests {
         final String TICKET = "ST-200000-aA5Yuvrxzpv8Tau1cYQ7-srv1";
         final String RESPONSE = "<cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'><cas:authenticationFailure code=\"INVALID_TICKET\">Ticket ST-200000-aA5Yuvrxzpv8Tau1cYQ7-srv1 not recognized</cas:authenticationFailure></cas:serviceResponse>";
         server.content = RESPONSE.getBytes(server.encoding);
+
+        final CasLoginModule module = new CasLoginModule();
+        final Subject subject = new Subject();
         module.initialize(
                 subject,
                 new ServiceAndTicketCallbackHandler(SERVICE, TICKET),
@@ -131,7 +167,32 @@ public class CasLoginModuleTests {
      */
     @Test
     public void testLogout() throws Exception {
-        testLoginSuccess();
+        final String USERNAME = "username";
+        final String SERVICE = "https://example.com/service";
+        final String TICKET = "ST-100000-aA5Yuvrxzpv8Tau1cYQ7-srv1";
+        final String RESPONSE = "<cas:serviceResponse xmlns:cas='http://www.yale.edu/tp/cas'>"
+                + "<cas:authenticationSuccess><cas:user>" + USERNAME
+                + "</cas:user></cas:authenticationSuccess></cas:serviceResponse>";
+        server.content = RESPONSE.getBytes(server.encoding);
+
+        final CasLoginModule module = new CasLoginModule();
+        final Subject subject = new Subject();
+        module.initialize(
+                subject,
+                new ServiceAndTicketCallbackHandler(SERVICE, TICKET),
+                new HashMap<String, Object>(),
+                options);
+        module.login();
+        module.commit();
+        assertEquals(subject.getPrincipals().size(), 3);
+        assertEquals(TICKET, subject.getPrivateCredentials().iterator().next().toString());
+        assertTrue(hasPrincipalName(subject, Group.class, "CallerPrincipal"));
+        assertTrue(hasPrincipalName(subject, Group.class, "Roles"));
+        final AssertionPrincipal principal = getPrincipal(subject, AssertionPrincipal.class);
+        assertEquals(USERNAME, principal.getName());
+        final Matcher m = CasLoginModule.UNIQUE_SUFFIX_PATTERN.matcher(principal.getServicePrincipal());
+        assertTrue(m.matches());
+
         module.logout();
         assertEquals(0, subject.getPrincipals().size());
         assertEquals(0, subject.getPrivateCredentials().size());
@@ -155,6 +216,9 @@ public class CasLoginModuleTests {
         options.put("cacheTimeout", "1");
 
         server.content = SUCCESS_RESPONSE.getBytes(server.encoding);
+
+        final CasLoginModule module = new CasLoginModule();
+        final Subject subject = new Subject();
         module.initialize(
                 subject,
                 new ServiceAndTicketCallbackHandler(SERVICE, TICKET),
@@ -162,8 +226,8 @@ public class CasLoginModuleTests {
                 options);
         module.login();
         module.commit();
-        assertEquals(this.subject.getPrincipals().size(), 3);
-        assertEquals(TICKET, this.subject.getPrivateCredentials().iterator().next().toString());
+        assertEquals(subject.getPrincipals().size(), 3);
+        assertEquals(TICKET, subject.getPrivateCredentials().iterator().next().toString());
 
         // Logout should destroy all authenticated state data including assertion cache entries
         module.logout();
@@ -184,8 +248,8 @@ public class CasLoginModuleTests {
         } catch (LoginException e) {
             assertEquals(TicketValidationException.class, e.getCause().getClass());
         }
-        assertEquals(0, this.subject.getPrincipals().size());
-        assertEquals(0, this.subject.getPrivateCredentials().size());
+        assertEquals(0, subject.getPrincipals().size());
+        assertEquals(0, subject.getPrivateCredentials().size());
     }
 
     /**
@@ -210,6 +274,9 @@ public class CasLoginModuleTests {
         options.put("cacheTimeout", "1");
 
         server.content = SUCCESS_RESPONSE.getBytes(server.encoding);
+
+        final CasLoginModule module = new CasLoginModule();
+        final Subject subject = new Subject();
         module.initialize(
                 subject,
                 new ServiceAndTicketCallbackHandler(SERVICE, TICKET),
@@ -232,6 +299,11 @@ public class CasLoginModuleTests {
         } catch (LoginException e) {
             assertEquals(TicketValidationException.class, e.getCause().getClass());
         }
+    }
+
+    private <T extends Principal> T getPrincipal(final Subject subject, final Class<T> principalType)
+    {
+        return subject.getPrincipals(principalType).iterator().next();
     }
 
     private boolean hasPrincipalName(final Subject subject, final Class<? extends Principal> principalClass,

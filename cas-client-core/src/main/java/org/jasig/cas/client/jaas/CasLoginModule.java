@@ -139,7 +139,7 @@ public class CasLoginModule implements LoginModule {
 
     /** Unique suffix pattern appended to some service URLs to make them unique. */
     protected static final Pattern UNIQUE_SUFFIX_PATTERN =
-            Pattern.compile(".*;uuid=\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
+            Pattern.compile("(.*);uuid=\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
 
     /** Logger instance */
     protected final Logger logger = LoggerFactory.getLogger(getClass());
@@ -327,7 +327,7 @@ public class CasLoginModule implements LoginModule {
                     final Matcher m = UNIQUE_SUFFIX_PATTERN.matcher(this.service);
                     if (m.matches()) {
                         this.servicePrincipal = this.service;
-                        this.service = m.replaceFirst("");
+                        this.service = m.replaceFirst("$1");
                     } else {
                         this.servicePrincipal = this.service + createUniqueSuffix();
                     }
