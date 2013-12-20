@@ -33,19 +33,24 @@ import org.jasig.cas.client.validation.Assertion;
 public class AssertionPrincipal extends SimplePrincipal implements Serializable {
 
     /** AssertionPrincipal.java */
-    private static final long serialVersionUID = 2288520214366461693L;
+    private static final long serialVersionUID = 1572526837434920575L;
 
     /** CAS assertion describing authenticated state */
     private Assertion assertion;
+
+    /** Service principal ID. */
+    private String servicePrincipal;
 
     /**
      * Creates a new principal containing the CAS assertion.
      *
      * @param name Principal name.
+     * @param servicePrincipal  Service principal ID.
      * @param assertion CAS assertion.
      */
-    public AssertionPrincipal(final String name, final Assertion assertion) {
+    public AssertionPrincipal(final String name, final String servicePrincipal, final Assertion assertion) {
         super(name);
+        this.servicePrincipal = servicePrincipal;
         this.assertion = assertion;
     }
 
@@ -54,5 +59,12 @@ public class AssertionPrincipal extends SimplePrincipal implements Serializable 
      */
     public Assertion getAssertion() {
         return this.assertion;
+    }
+
+    /**
+     * @return  Service principal ID.
+     */
+    public String getServicePrincipal() {
+        return servicePrincipal;
     }
 }

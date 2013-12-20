@@ -72,7 +72,7 @@ public class SerializationTests extends TestCase {
         final SimpleGroup simpleGroup = new SimpleGroup("group");
         final AttributePrincipalImpl attributePrincipal = new AttributePrincipalImpl("attr",
                 Collections.<String, Object> singletonMap("LOA", "3"));
-        final AssertionPrincipal assertionPrincipal = new AssertionPrincipal("assertion", new AssertionImpl(
+        final AssertionPrincipal assertionPrincipal = new AssertionPrincipal("assertion", "foo", new AssertionImpl(
                 attributePrincipal, Collections.<String, Object> singletonMap("authenticationMethod", "username")));
 
         return new Object[] { simplePrincipal, simpleGroup, attributePrincipal, assertionPrincipal, };

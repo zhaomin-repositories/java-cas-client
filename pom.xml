@@ -8,7 +8,7 @@
     </parent>
     <modelVersion>4.0.0</modelVersion>
     <groupId>org.jasig.cas.client</groupId>
-    <version>3.3-SNAPSHOT</version>
+    <version>3.3-jaas-unique-principal</version>
     <artifactId>cas-client</artifactId>
     <packaging>pom</packaging>
 

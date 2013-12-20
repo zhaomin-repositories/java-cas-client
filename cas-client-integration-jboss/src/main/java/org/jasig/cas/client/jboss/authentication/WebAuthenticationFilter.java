@@ -20,6 +20,8 @@ package org.jasig.cas.client.jboss.authentication;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.UUID;
+
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
 import javax.servlet.ServletRequest;
@@ -28,6 +30,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import org.jasig.cas.client.jaas.AssertionPrincipal;
+import org.jasig.cas.client.jaas.CasLoginModule;
 import org.jasig.cas.client.util.AbstractCasFilter;
 import org.jasig.cas.client.util.CommonUtils;
 import org.jboss.web.tomcat.security.login.WebAuthentication;
@@ -61,7 +64,7 @@ public final class WebAuthenticationFilter extends AbstractCasFilter {
             try {
                 final String service = constructServiceUrl(request, response);
                 logger.debug("Attempting CAS ticket validation with service={} and ticket={}", service, ticket);
-                if (!new WebAuthentication().login(service, ticket)) {
+                if (!new WebAuthentication().login(service + CasLoginModule.createUniqueSuffix(), ticket)) {
                     logger.debug("JBoss Web authentication failed.");
                     throw new GeneralSecurityException("JBoss Web authentication failed.");
                 }

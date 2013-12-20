@@ -27,6 +27,9 @@ import java.security.Principal;
 import java.security.acl.Group;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import javax.security.auth.Subject;
 import javax.security.auth.callback.*;
 import javax.security.auth.login.LoginException;
@@ -134,6 +137,10 @@ public class CasLoginModule implements LoginModule {
      */
     protected static final Map<TicketCredential, Assertion> ASSERTION_CACHE = new HashMap<TicketCredential, Assertion>();
 
+    /** Unique suffix pattern appended to some service URLs to make them unique. */
+    protected static final Pattern UNIQUE_SUFFIX_PATTERN =
+            Pattern.compile(".*;uuid=\\p{XDigit}{8}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{4}-\\p{XDigit}{12}");
+
     /** Logger instance */
     protected final Logger logger = LoggerFactory.getLogger(getClass());
 
@@ -146,8 +153,11 @@ public class CasLoginModule implements LoginModule {
     /** CAS ticket validator */
     protected TicketValidator ticketValidator;
 
-    /** CAS service parameter used if no service is provided via TextCallback on login */
+    /** CAS ticket validation URL. */
     protected String service;
+
+    /** Service principal. */
+    protected String servicePrincipal;
 
     /** CAS assertion */
     protected Assertion assertion;
@@ -178,6 +188,16 @@ public class CasLoginModule implements LoginModule {
 
     /** Units of cache timeout. */
     protected TimeUnit cacheTimeoutUnit = DEFAULT_CACHE_TIMEOUT_UNIT;
+
+
+    /**
+     * @return  Unique suffix suitable for appending to service URLs to make them unique.
+     */
+    public static String createUniqueSuffix()
+    {
+        return ";uuid=" + UUID.randomUUID();
+    }
+
 
     /**
      * Initializes the CAS login module.
@@ -302,11 +322,20 @@ public class CasLoginModule implements LoginModule {
 
             if (ticketCallback.getPassword() != null) {
                 this.ticket = new TicketCredential(new String(ticketCallback.getPassword()));
-                final String service = CommonUtils.isNotBlank(serviceCallback.getName()) ? serviceCallback.getName()
-                        : this.service;
-
+                if (CommonUtils.isBlank(this.service)) {
+                    this.service = serviceCallback.getName();
+                    final Matcher m = UNIQUE_SUFFIX_PATTERN.matcher(this.service);
+                    if (m.matches()) {
+                        this.servicePrincipal = this.service;
+                        this.service = m.replaceFirst("");
+                    } else {
+                        this.servicePrincipal = this.service + createUniqueSuffix();
+                    }
+                } else {
+                    this.servicePrincipal = this.service + createUniqueSuffix();
+                }
                 if (this.cacheAssertions) {
-                    this.assertion = ASSERTION_CACHE.get(ticket);
+                    this.assertion = ASSERTION_CACHE.get(this.ticket);
                     if (this.assertion != null) {
                         logger.debug("Assertion found in cache.");
                     }
@@ -320,9 +349,11 @@ public class CasLoginModule implements LoginModule {
                                 "Neither login module nor callback handler provided required service parameter.");
                     }
                     try {
-                        logger.debug("Attempting ticket validation with service={}  and ticket={}", service,
+                        logger.debug(
+                                "Attempting ticket validation with service={}  and ticket={}",
+                                this.service,
                                 this.ticket);
-                        this.assertion = this.ticketValidator.validate(this.ticket.getName(), service);
+                        this.assertion = this.ticketValidator.validate(this.ticket.getName(), this.service);
 
                     } catch (final Exception e) {
                         logger.info("Login failed due to CAS ticket validation failure: {}", e);
@@ -383,7 +414,9 @@ public class CasLoginModule implements LoginModule {
                     throw new LoginException("Ticket credential not found.");
                 }
 
-                final AssertionPrincipal casPrincipal = new AssertionPrincipal(this.assertion.getPrincipal().getName(),
+                final AssertionPrincipal casPrincipal = new AssertionPrincipal(
+                        this.assertion.getPrincipal().getName(),
+                        this.servicePrincipal,
                         this.assertion);
                 this.subject.getPrincipals().add(casPrincipal);
 
@@ -396,7 +429,7 @@ public class CasLoginModule implements LoginModule {
                 // Add group principal containing role data
                 final Group roleGroup = new SimpleGroup(this.roleGroupName);
 
-                for (final String defaultRole : defaultRoles) {
+                for (final String defaultRole : this.defaultRoles) {
                     roleGroup.addMember(new SimplePrincipal(defaultRole));
                 }
 
@@ -417,9 +450,9 @@ public class CasLoginModule implements LoginModule {
                 this.subject.getPrincipals().add(roleGroup);
 
                 // Place principal name in shared state for downstream JAAS modules (module chaining use case)
-                this.sharedState.put(LOGIN_NAME, assertion.getPrincipal().getName());
+                this.sharedState.put(LOGIN_NAME, this.assertion.getPrincipal().getName());
 
-                logger.debug("Created JAAS subject with principals: {}", subject.getPrincipals());
+                logger.debug("Created JAAS subject with principals: {}", this.subject.getPrincipals());
 
                 if (this.cacheAssertions) {
                     logger.debug("Caching assertion for principal {}", this.assertion.getPrincipal());
